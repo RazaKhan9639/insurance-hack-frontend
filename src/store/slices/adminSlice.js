@@ -234,6 +234,27 @@ export const getSystemStats = createAsyncThunk(
   }
 );
 
+export const processManualPayout = createAsyncThunk(
+  'admin/processManualPayout',
+  async (payoutData, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.post(`${API_URL}/admin/commissions/payout`, payoutData, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error processing payout:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to process payout');
+    }
+  }
+);
+
 export const performBulkActions = createAsyncThunk(
   'admin/performBulkActions',
   async ({ action, ids, data }, { rejectWithValue, getState }) => {
@@ -421,6 +442,19 @@ const adminSlice = createSlice({
         state.success = true;
       })
       .addCase(processBulkPayout.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Process Manual Payout
+      .addCase(processManualPayout.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(processManualPayout.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+      })
+      .addCase(processManualPayout.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

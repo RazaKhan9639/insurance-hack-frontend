@@ -68,6 +68,40 @@ const CourseManagement = () => {
     isActive: true,
   });
 
+  const [validationErrors, setValidationErrors] = useState({});
+
+  const validateUrl = (url) => {
+    if (!url || url.trim() === '') return true; // Empty is valid
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!courseData.title.trim()) errors.title = 'Title is required';
+    if (!courseData.description.trim()) errors.description = 'Description is required';
+    if (!courseData.price || courseData.price <= 0) errors.price = 'Price must be greater than 0';
+    if (!courseData.category.trim()) errors.category = 'Category is required';
+    
+    if (courseData.image && !validateUrl(courseData.image)) {
+      errors.image = 'Please enter a valid image URL';
+    }
+    if (courseData.pdfUrl && !validateUrl(courseData.pdfUrl)) {
+      errors.pdfUrl = 'Please enter a valid PDF URL';
+    }
+    if (courseData.videoUrl && !validateUrl(courseData.videoUrl)) {
+      errors.videoUrl = 'Please enter a valid video URL';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   useEffect(() => {
     dispatch(fetchCourses());
   }, [dispatch]);
@@ -80,6 +114,7 @@ const CourseManagement = () => {
   }, [courses, loading, error]);
 
   const handleOpenDialog = (course = null) => {
+    setValidationErrors({}); // Clear validation errors
     if (course) {
       setEditingCourse(course);
       setCourseData({
@@ -121,15 +156,31 @@ const CourseManagement = () => {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingCourse(null);
+    setValidationErrors({}); // Clear validation errors
   };
 
   const handleSubmit = async () => {
+    if (!validateForm()) {
+      return; // Don't submit if validation fails
+    }
+
     const submitData = {
       ...courseData,
       price: parseFloat(courseData.price),
       requirements: courseData.requirements.split('\n').filter(req => req.trim()),
       whatYouWillLearn: courseData.whatYouWillLearn.split('\n').filter(item => item.trim()),
     };
+
+    // Clean up empty URL fields to prevent validation errors
+    if (!submitData.image || submitData.image.trim() === '') {
+      delete submitData.image;
+    }
+    if (!submitData.pdfUrl || submitData.pdfUrl.trim() === '') {
+      delete submitData.pdfUrl;
+    }
+    if (!submitData.videoUrl || submitData.videoUrl.trim() === '') {
+      delete submitData.videoUrl;
+    }
 
     if (editingCourse) {
       await dispatch(updateCourse({ courseId: editingCourse._id, courseData: submitData }));
@@ -281,6 +332,9 @@ const CourseManagement = () => {
                 onChange={(e) => setCourseData({ ...courseData, title: e.target.value })}
                 required
               />
+              {validationErrors.title && (
+                <Typography variant="caption" color="error">{validationErrors.title}</Typography>
+              )}
             </Grid>
             <Grid xs={12} sm={6}>
               <TextField
@@ -294,6 +348,9 @@ const CourseManagement = () => {
                   startAdornment: '£',
                 }}
               />
+              {validationErrors.price && (
+                <Typography variant="caption" color="error">{validationErrors.price}</Typography>
+              )}
             </Grid>
             <Grid xs={12} sm={6}>
               <TextField
@@ -327,6 +384,9 @@ const CourseManagement = () => {
                 onChange={(e) => setCourseData({ ...courseData, category: e.target.value })}
                 required
               />
+              {validationErrors.category && (
+                <Typography variant="caption" color="error">{validationErrors.category}</Typography>
+              )}
             </Grid>
             <Grid xs={12} sm={6}>
               <FormControl fullWidth>
@@ -351,6 +411,9 @@ const CourseManagement = () => {
                 rows={3}
                 required
               />
+              {validationErrors.description && (
+                <Typography variant="caption" color="error">{validationErrors.description}</Typography>
+              )}
             </Grid>
             <Grid xs={12}>
               <TextField
@@ -392,11 +455,15 @@ const CourseManagement = () => {
                 label="Image URL"
                 value={courseData.image}
                 onChange={(e) => setCourseData({ ...courseData, image: e.target.value })}
-                placeholder="https://source.unsplash.com/random?course"
+                placeholder="https://example.com/image.jpg"
+                helperText="Enter a valid image URL (optional)"
                 InputProps={{
                   startAdornment: <Visibility />,
                 }}
               />
+              {validationErrors.image && (
+                <Typography variant="caption" color="error">{validationErrors.image}</Typography>
+              )}
             </Grid>
             <Grid xs={12} sm={6}>
               <TextField
@@ -404,11 +471,15 @@ const CourseManagement = () => {
                 label="PDF URL"
                 value={courseData.pdfUrl}
                 onChange={(e) => setCourseData({ ...courseData, pdfUrl: e.target.value })}
-                placeholder="https://yourdomain.com/course.pdf"
+                placeholder="https://example.com/course.pdf"
+                helperText="Enter a valid PDF URL (optional)"
                 InputProps={{
                   startAdornment: <AttachFile />,
                 }}
               />
+              {validationErrors.pdfUrl && (
+                <Typography variant="caption" color="error">{validationErrors.pdfUrl}</Typography>
+              )}
             </Grid>
             <Grid xs={12} sm={6}>
               <TextField
@@ -416,11 +487,15 @@ const CourseManagement = () => {
                 label="Video URL"
                 value={courseData.videoUrl}
                 onChange={(e) => setCourseData({ ...courseData, videoUrl: e.target.value })}
-                placeholder="https://yourdomain.com/course-video"
+                placeholder="https://example.com/course-video.mp4"
+                helperText="Enter a valid video URL (optional)"
                 InputProps={{
                   startAdornment: <VideoLibrary />,
                 }}
               />
+              {validationErrors.videoUrl && (
+                <Typography variant="caption" color="error">{validationErrors.videoUrl}</Typography>
+              )}
             </Grid>
           </Grid>
         </DialogContent>

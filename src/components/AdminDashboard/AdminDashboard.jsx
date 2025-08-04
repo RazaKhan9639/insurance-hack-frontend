@@ -36,6 +36,8 @@ import {
 } from '../../store/slices/adminSlice';
 import CourseManagement from './CourseManagement';
 import UserManagement from './UserManagement';
+import PaymentManagement from './PaymentManagement';
+import CommissionManagement from './CommissionManagement';
 
 const TabPanel = ({ children, value, index, ...other }) => (
   <div
@@ -248,21 +250,11 @@ const AdminDashboard = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
-          <Typography variant="h6" gutterBottom>
-            Payment Management
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Payment management features will be implemented here.
-          </Typography>
+          <PaymentManagement />
         </TabPanel>
 
         <TabPanel value={tabValue} index={4}>
-          <Typography variant="h6" gutterBottom>
-            Commission Management
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Commission management features will be implemented here.
-          </Typography>
+          <CommissionManagement />
         </TabPanel>
       </Paper>
     </Container>

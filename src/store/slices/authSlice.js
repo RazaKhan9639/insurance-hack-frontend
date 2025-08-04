@@ -97,6 +97,22 @@ export const changePassword = createAsyncThunk(
   }
 );
 
+export const updateBankDetails = createAsyncThunk(
+  'auth/updateBankDetails',
+  async (bankData, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      const response = await axios.put(`${API_URL}/auth/bank-details`, bankData, config);
+      return response?.data?.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Failed to update bank details');
+    }
+  }
+);
+
 export const logoutUser = createAsyncThunk(
   'auth/logout',
   async () => {
@@ -199,6 +215,20 @@ const authSlice = createSlice({
         state.success = true;
       })
       .addCase(changePassword.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Update Bank Details
+      .addCase(updateBankDetails.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateBankDetails.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        state.user = action.payload?.user;
+      })
+      .addCase(updateBankDetails.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

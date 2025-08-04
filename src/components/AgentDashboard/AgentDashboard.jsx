@@ -42,6 +42,11 @@ import {
   MonetizationOn,
 } from '@mui/icons-material';
 import {
+  Tabs,
+  Tab,
+  AppBar,
+} from '@mui/material';
+import {
   getReferralStats,
   getReferralHistory,
   getCommissionHistory,
@@ -49,6 +54,7 @@ import {
   requestPayout,
   updateAgentProfile,
 } from '../../store/slices/referralSlice';
+import BankDetails from './BankDetails';
 
 const AgentDashboard = () => {
   const dispatch = useDispatch();
@@ -56,6 +62,7 @@ const AgentDashboard = () => {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutMethod, setPayoutMethod] = useState('bank_transfer');
   const [profileDialog, setProfileDialog] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
   const [profileData, setProfileData] = useState({
     firstName: '',
     lastName: '',
@@ -123,6 +130,10 @@ const AgentDashboard = () => {
   const handleUpdateProfile = () => {
     dispatch(updateAgentProfile(profileData));
     setProfileDialog(false);
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
   };
 
   const stats = [
@@ -297,20 +308,22 @@ const AgentDashboard = () => {
                           <TableCell>
                             <Stack direction="row" spacing={1} alignItems="center">
                               <Avatar sx={{ width: 24, height: 24 }}>
-                                {referral.firstName?.[0] || referral.username?.[0]}
+                                {referral.username?.charAt(0).toUpperCase()}
                               </Avatar>
                               <Typography variant="body2">
-                                {referral.firstName} {referral.lastName}
+                                {referral.username}
                               </Typography>
                             </Stack>
                           </TableCell>
                           <TableCell>
-                            {new Date(referral.createdAt).toLocaleDateString()}
+                            <Typography variant="body2">
+                              {new Date(referral.createdAt).toLocaleDateString()}
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={referral.hasPurchased ? 'Purchased' : 'Registered'}
-                              color={referral.hasPurchased ? 'success' : 'default'}
+                              label={referral.status || 'Active'}
+                              color="success"
                               size="small"
                             />
                           </TableCell>
@@ -324,7 +337,7 @@ const AgentDashboard = () => {
           </Card>
         </Grid>
 
-        {/* Recent Commissions */}
+        {/* Commission History */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -340,21 +353,16 @@ const AgentDashboard = () => {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Referral</TableCell>
                         <TableCell>Amount</TableCell>
                         <TableCell>Status</TableCell>
+                        <TableCell>Date</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {commissionHistory?.slice(0, 5).map((commission) => (
                         <TableRow key={commission._id}>
                           <TableCell>
-                            <Typography variant="body2">
-                              {commission.referral?.firstName} {commission.referral?.lastName}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="success.main">
+                            <Typography variant="body2" fontWeight="medium">
                               £{commission.amount}
                             </Typography>
                           </TableCell>
@@ -364,6 +372,11 @@ const AgentDashboard = () => {
                               color={commission.status === 'paid' ? 'success' : 'warning'}
                               size="small"
                             />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {new Date(commission.createdAt).toLocaleDateString()}
+                            </Typography>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -375,6 +388,97 @@ const AgentDashboard = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Tabbed Content */}
+      <Paper sx={{ width: '100%', mt: 4 }}>
+        <AppBar position="static" color="default">
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            indicatorColor="primary"
+            textColor="primary"
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab label="Overview" />
+            <Tab label="Bank Details" />
+            <Tab label="Commission History" />
+          </Tabs>
+        </AppBar>
+
+        {/* Overview Tab */}
+        {tabValue === 0 && (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Agent Overview
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Welcome to your agent dashboard. Use the tabs above to manage your bank details and view commission history.
+            </Typography>
+          </Box>
+        )}
+
+        {/* Bank Details Tab */}
+        {tabValue === 1 && (
+          <Box sx={{ p: 3 }}>
+            <BankDetails />
+          </Box>
+        )}
+
+        {/* Commission History Tab */}
+        {tabValue === 2 && (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Commission History
+            </Typography>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Amount</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Payment Method</TableCell>
+                      <TableCell>Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {commissionHistory?.map((commission) => (
+                      <TableRow key={commission._id}>
+                        <TableCell>
+                          <Typography variant="body1" fontWeight="medium">
+                            £{commission.amount}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={commission.status}
+                            color={commission.status === 'paid' ? 'success' : 'warning'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {commission.payoutMethod || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {new Date(commission.createdAt).toLocaleDateString()}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        )}
+      </Paper>
 
       {/* Action Buttons */}
       <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
