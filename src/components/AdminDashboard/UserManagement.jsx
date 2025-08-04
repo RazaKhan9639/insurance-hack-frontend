@@ -220,6 +220,7 @@ const UserManagement = () => {
               <TableCell>Role</TableCell>
               <TableCell>Commission Rate</TableCell>
               <TableCell>Agent Status</TableCell>
+              <TableCell>Referred By</TableCell>
               <TableCell>Total Referrals</TableCell>
               <TableCell>Total Commission</TableCell>
               <TableCell>Actions</TableCell>
@@ -264,10 +265,24 @@ const UserManagement = () => {
                   ) : '-'}
                 </TableCell>
                 <TableCell>
-                  {user.totalReferrals || 0}
+                  {user.referredBy ? (
+                    <Chip 
+                      label={`${user.referredBy.firstName} ${user.referredBy.lastName}`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  ) : '-'}
                 </TableCell>
                 <TableCell>
-                  £{user.totalCommission || 0}
+                  {user.role === 'agent' ? (
+                    user.referralStats ? user.referralStats.referralCount : 0
+                  ) : '-'}
+                </TableCell>
+                <TableCell>
+                  {user.role === 'agent' ? (
+                    `£${user.referralStats ? user.referralStats.totalCommission.toFixed(2) : '0.00'}`
+                  ) : '-'}
                 </TableCell>
                 <TableCell>
                   <IconButton size="small" onClick={() => handleOpenEditDialog(user)}>
