@@ -198,9 +198,12 @@ const Home = () => {
                   <CardMedia
                     component="img"
                     height="160" // Fixed height for all images
-                    image={course.image || 'https://source.unsplash.com/random?course'}
+                    src={course.image || 'https://picsum.photos/300/160?random=' + course._id}
                     alt={course.title}
                     sx={{ objectFit: 'cover' }}
+                    onError={(e) => {
+                      e.target.src = 'https://picsum.photos/300/160?random=' + (course._id || Math.random());
+                    }}
                   />
                   <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                     <Typography 

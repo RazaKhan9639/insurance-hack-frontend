@@ -55,6 +55,7 @@ const Dashboard = () => {
   });
   
   const { courses, enrolledCourses, loading } = useSelector((state) => state.course);
+  console.log("courses--->", courses);
   const { user } = useSelector((state) => state.auth);
   const { loading: agentLoading, success: agentSuccess, error: agentError } = useSelector((state) => state.referral);
 
@@ -254,9 +255,12 @@ const Dashboard = () => {
                   <CardMedia
                     component="img"
                     height="160" // Fixed height for all images
-                    image={course.image || 'https://source.unsplash.com/random?course'}
+                    src={course?.image || 'https://picsum.photos/300/160?random=' + course?._id}
                     alt={course.title}
                     sx={{ objectFit: 'cover' }}
+                    onError={(e) => {
+                      e.target.src = 'https://picsum.photos/300/160?random=' + (course?._id || Math.random());
+                    }}
                   />
                   <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                     <Typography 
@@ -381,9 +385,12 @@ const Dashboard = () => {
                     <CardMedia
                       component="img"
                       height="160" // Fixed height for all images
-                      image={course.image || 'https://source.unsplash.com/random?course'}
+                      src={course.image || 'https://picsum.photos/300/160?random=' + course._id}
                       alt={course.title}
                       sx={{ objectFit: 'cover' }}
+                      onError={(e) => {
+                        e.target.src = 'https://picsum.photos/300/160?random=' + (course._id || Math.random());
+                      }}
                     />
                     <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                       <Typography 

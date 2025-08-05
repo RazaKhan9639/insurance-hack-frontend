@@ -507,9 +507,12 @@ const Payment = () => {
               <CardMedia
                 component="img"
                 height="250"
-                image={course.image || 'https://source.unsplash.com/random?course'}
+                src={course.image || 'https://picsum.photos/400/250?random=' + course._id}
                 alt={course.title}
                 sx={{ objectFit: 'cover' }}
+                onError={(e) => {
+                  e.target.src = 'https://picsum.photos/400/250?random=' + (course._id || Math.random());
+                }}
               />
               <CardContent sx={{ p: 3 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>

@@ -265,8 +265,11 @@ const CourseManagement = () => {
                       <CardMedia
                         component="img"
                         sx={{ width: 50, height: 50, mr: 2, borderRadius: 1 }}
-                        image={course.image || 'https://source.unsplash.com/random?course'}
+                        src={course.image || 'https://picsum.photos/50/50?random=' + course._id}
                         alt={course.title || 'Course'}
+                        onError={(e) => {
+                          e.target.src = 'https://picsum.photos/50/50?random=' + (course._id || Math.random());
+                        }}
                       />
                       <Box>
                         <Typography variant="subtitle2">{course.title || 'Untitled Course'}</Typography>

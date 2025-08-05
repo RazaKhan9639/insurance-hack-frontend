@@ -136,8 +136,11 @@ const CourseDetails = () => {
             <CardMedia
               component="img"
               height="300"
-              image={course.image || 'https://source.unsplash.com/random?course'}
+              src={course.image || 'https://picsum.photos/600/300?random=' + course._id}
               alt={course.title}
+              onError={(e) => {
+                e.target.src = 'https://picsum.photos/600/300?random=' + (course._id || Math.random());
+              }}
             />
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
