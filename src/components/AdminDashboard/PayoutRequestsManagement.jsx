@@ -29,38 +29,49 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar
 } from '@mui/material';
 import {
   Visibility,
-  Receipt,
+  Payment,
   TrendingUp,
   AccountBalance,
-  Payment as PaymentIcon,
+  AttachMoney,
   FilterList,
   Refresh,
   Download,
-  Search
+  Search,
+  CheckCircle,
+  Cancel,
+  Warning
 } from '@mui/icons-material';
-import { getAllPayments, processBankTransfer } from '../../store/slices/adminSlice';
+import { getAllPayoutRequests, processPayoutRequest } from '../../store/slices/adminSlice';
 
-const PaymentManagement = () => {
+const PayoutRequestsManagement = () => {
   const dispatch = useDispatch();
-  const { payments, loading, error } = useSelector((state) => state.admin);
-  
-
+  const { payoutRequests, loading, error } = useSelector((state) => state.admin);
   
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [filters, setFilters] = useState({
     status: '',
-    referral: '',
     agentId: '',
-    courseId: '',
     dateRange: ''
   });
-  const [selectedPayment, setSelectedPayment] = useState(null);
-  const [paymentDetailsOpen, setPaymentDetailsOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [requestDetailsOpen, setRequestDetailsOpen] = useState(false);
+  const [processDialogOpen, setProcessDialogOpen] = useState(false);
+  const [processData, setProcessData] = useState({
+    status: 'approved',
+    adminNotes: '',
+    payoutReference: '',
+    rejectionReason: ''
+  });
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -69,7 +80,7 @@ const PaymentManagement = () => {
       limit: rowsPerPage,
       ...filters
     };
-    dispatch(getAllPayments(params));
+    dispatch(getAllPayoutRequests(params));
   }, [dispatch, filters, page, rowsPerPage]);
 
   const handleChangePage = (event, newPage) => {
@@ -86,32 +97,52 @@ const PaymentManagement = () => {
     setPage(0);
   };
 
-  const handlePaymentDetails = (payment) => {
-    setSelectedPayment(payment);
-    setPaymentDetailsOpen(true);
+  const handleRequestDetails = (request) => {
+    setSelectedRequest(request);
+    setRequestDetailsOpen(true);
   };
 
-  const handlePayCommission = (payment) => {
-    const commissionAmount = (payment.amount * payment.referralAgent.commissionRate / 100).toFixed(2);
-    dispatch(processBankTransfer({
-      agentId: payment.referralAgent._id,
-      amount: parseFloat(commissionAmount),
-      notes: `Commission payment for payment ${payment._id}`,
-      transferReference: `COMM-${payment._id}`
-    }));
+  const handleProcessRequest = (request) => {
+    setSelectedRequest(request);
+    setProcessData({
+      status: 'approved',
+      adminNotes: '',
+      payoutReference: '',
+      rejectionReason: ''
+    });
+    setProcessDialogOpen(true);
   };
 
-  const handleExportPayments = () => {
-    const csvData = payments?.payments?.map(payment => ({
-      'Payment ID': payment._id,
-      'User': `${payment.user?.firstName} ${payment.user?.lastName}`,
-      'Email': payment.user?.email,
-      'Course': payment.course?.title,
-      'Amount': formatCurrency(payment.amount),
-      'Status': payment.status,
-      'Referral Agent': payment.referralAgent ? `${payment.referralAgent.firstName} ${payment.referralAgent.lastName}` : 'Direct',
-      'Commission': payment.referralAgent ? formatCurrency((payment.amount * payment.referralAgent.commissionRate / 100).toFixed(2)) : 'N/A',
-      'Date': formatDate(payment.createdAt)
+  const handleProcessSubmit = async () => {
+    try {
+      await dispatch(processPayoutRequest({
+        requestId: selectedRequest._id,
+        ...processData
+      }));
+      setProcessDialogOpen(false);
+      setSelectedRequest(null);
+      // Refresh requests
+      const params = {
+        page: page + 1,
+        limit: rowsPerPage,
+        ...filters
+      };
+      dispatch(getAllPayoutRequests(params));
+    } catch (error) {
+      console.error('Process request error:', error);
+    }
+  };
+
+  const handleExportRequests = () => {
+    const csvData = payoutRequests?.payoutRequests?.map(request => ({
+      'Agent': `${request.agent?.firstName} ${request.agent?.lastName}`,
+      'Agent Email': request.agent?.email,
+      'Amount': formatCurrency(request.amount),
+      'Status': request.status,
+      'Request Date': formatDate(request.requestDate),
+      'Processed Date': request.processedDate ? formatDate(request.processedDate) : 'N/A',
+      'Payment Method': request.paymentMethod,
+      'Notes': request.notes || 'N/A'
     }));
 
     const csvContent = [
@@ -123,7 +154,7 @@ const PaymentManagement = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `payments_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `payout_requests_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -146,12 +177,29 @@ const PaymentManagement = () => {
     switch (status) {
       case 'completed':
         return 'success';
+      case 'approved':
+        return 'info';
       case 'pending':
         return 'warning';
-      case 'failed':
+      case 'rejected':
         return 'error';
       default:
         return 'default';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle color="success" />;
+      case 'approved':
+        return <CheckCircle color="info" />;
+      case 'pending':
+        return <Warning color="warning" />;
+      case 'rejected':
+        return <Cancel color="error" />;
+      default:
+        return <Warning />;
     }
   };
 
@@ -166,7 +214,7 @@ const PaymentManagement = () => {
   return (
     <Box>
       <Typography variant="h6" gutterBottom>
-        Payment Management
+        Payout Requests Management
       </Typography>
 
       {error && (
@@ -183,47 +231,13 @@ const PaymentManagement = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h4" color="primary">
-                    {formatCurrency(payments?.summary?.totalAmount || 0)}
+                    {formatCurrency(payoutRequests?.summary?.totalAmount || 0)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Total Revenue
+                    Total Requested
                   </Typography>
                 </Box>
-                <PaymentIcon color="primary" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h4" color="success.main">
-                    {payments?.summary?.totalPayments || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Payments
-                  </Typography>
-                </Box>
-                <Receipt color="success" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h4" color="info.main">
-                    {payments?.summary?.referralPayments || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Referral Payments
-                  </Typography>
-                </Box>
-                <TrendingUp color="info" />
+                <AttachMoney color="primary" />
               </Box>
             </CardContent>
           </Card>
@@ -234,13 +248,47 @@ const PaymentManagement = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h4" color="warning.main">
-                    {formatCurrency(payments?.summary?.referralAmount || 0)}
+                    {formatCurrency(payoutRequests?.summary?.pendingAmount || 0)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Referral Revenue
+                    Pending Requests
                   </Typography>
                 </Box>
-                <AccountBalance color="warning" />
+                <Payment color="warning" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" color="info.main">
+                    {formatCurrency(payoutRequests?.summary?.approvedAmount || 0)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Approved Requests
+                  </Typography>
+                </Box>
+                <AccountBalance color="info" />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h4" color="success.main">
+                    {formatCurrency(payoutRequests?.summary?.completedAmount || 0)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Completed Payouts
+                  </Typography>
+                </Box>
+                <TrendingUp color="success" />
               </Box>
             </CardContent>
           </Card>
@@ -256,14 +304,14 @@ const PaymentManagement = () => {
           <Button
             variant="outlined"
             startIcon={<Download />}
-            onClick={handleExportPayments}
-            disabled={!payments?.payments?.length}
+            onClick={handleExportRequests}
+            disabled={!payoutRequests?.payoutRequests?.length}
           >
             Export CSV
           </Button>
         </Box>
         <Grid container spacing={2}>
-          <Grid xs={12} sm={6} md={3}>
+          <Grid xs={12} sm={6} md={4}>
             <TextField
               fullWidth
               label="Search"
@@ -272,10 +320,10 @@ const PaymentManagement = () => {
               InputProps={{
                 startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
               }}
-              placeholder="Search by user, course, or transaction ID"
+              placeholder="Search by agent name or email"
             />
           </Grid>
-          <Grid xs={12} sm={6} md={3}>
+          <Grid xs={12} sm={6} md={4}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
@@ -284,27 +332,14 @@ const PaymentManagement = () => {
                 onChange={(e) => handleFilterChange('status', e.target.value)}
               >
                 <MenuItem value="">All</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
                 <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="failed">Failed</MenuItem>
+                <MenuItem value="approved">Approved</MenuItem>
+                <MenuItem value="completed">Completed</MenuItem>
+                <MenuItem value="rejected">Rejected</MenuItem>
               </Select>
             </FormControl>
           </Grid>
-          <Grid xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Referral</InputLabel>
-              <Select
-                value={filters.referral}
-                label="Referral"
-                onChange={(e) => handleFilterChange('referral', e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="true">Referral Payments</MenuItem>
-                <MenuItem value="false">Direct Payments</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid xs={12} sm={6} md={3}>
+          <Grid xs={12} sm={6} md={4}>
             <FormControl fullWidth>
               <InputLabel>Date Range</InputLabel>
               <Select
@@ -327,9 +362,7 @@ const PaymentManagement = () => {
             onClick={() => {
               setFilters({
                 status: '',
-                referral: '',
                 agentId: '',
-                courseId: '',
                 dateRange: ''
               });
               setSearchTerm('');
@@ -341,119 +374,95 @@ const PaymentManagement = () => {
         </Box>
       </Paper>
 
-      {/* Payments Table */}
+      {/* Payout Requests Table */}
       <Paper>
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>Course</TableCell>
+                <TableCell>Agent</TableCell>
                 <TableCell>Amount</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Referral Agent</TableCell>
-                <TableCell>Commission</TableCell>
-                <TableCell>Date</TableCell>
+                <TableCell>Request Date</TableCell>
+                <TableCell>Bank Details</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {payments?.payments
-                ?.filter(payment => {
+              {payoutRequests?.payoutRequests
+                ?.filter(request => {
                   if (!searchTerm) return true;
                   const searchLower = searchTerm.toLowerCase();
                   return (
-                    payment.user?.firstName?.toLowerCase().includes(searchLower) ||
-                    payment.user?.lastName?.toLowerCase().includes(searchLower) ||
-                    payment.user?.email?.toLowerCase().includes(searchLower) ||
-                    payment.course?.title?.toLowerCase().includes(searchLower) ||
-                    payment._id?.toLowerCase().includes(searchLower)
+                    request.agent?.firstName?.toLowerCase().includes(searchLower) ||
+                    request.agent?.lastName?.toLowerCase().includes(searchLower) ||
+                    request.agent?.email?.toLowerCase().includes(searchLower)
                   );
                 })
-                .map((payment) => (
-                <TableRow key={payment._id}>
+                .map((request) => (
+                <TableRow key={request._id}>
                   <TableCell>
                     <Box>
                       <Typography variant="body2" fontWeight="medium">
-                        {payment.user?.firstName} {payment.user?.lastName}
+                        {request.agent?.firstName} {request.agent?.lastName}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {payment.user?.email}
+                        {request.agent?.email}
                       </Typography>
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2">
-                      {payment.course?.title}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
                     <Typography variant="body2" fontWeight="medium">
-                      {formatCurrency(payment.amount)}
+                      {formatCurrency(request.amount)}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={payment.status}
-                      color={getStatusColor(payment.status)}
-                      size="small"
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {getStatusIcon(request.status)}
+                      <Chip
+                        label={request.status}
+                        color={getStatusColor(request.status)}
+                        size="small"
+                      />
+                    </Box>
                   </TableCell>
                   <TableCell>
-                    {payment.referralAgent ? (
+                    <Typography variant="body2">
+                      {formatDate(request.requestDate)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {request.agent?.bankDetails ? (
                       <Box>
                         <Typography variant="body2">
-                          {payment.referralAgent.firstName} {payment.referralAgent.lastName}
+                          {request.agent.bankDetails.bankName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {payment.referralAgent.commissionRate}% commission
+                          ****{request.agent.bankDetails.accountNumber?.slice(-4)}
                         </Typography>
                       </Box>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Direct
+                      <Typography variant="body2" color="error">
+                        No Bank Details
                       </Typography>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    {payment.referralAgent ? (
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {formatCurrency((payment.amount * payment.referralAgent.commissionRate / 100).toFixed(2))}
-                        </Typography>
-                        <Chip
-                          label={payment.commissionStatus || 'pending'}
-                          color={getStatusColor(payment.commissionStatus || 'pending')}
-                          size="small"
-                        />
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        N/A
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {formatDate(payment.createdAt)}
-                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       <Tooltip title="View Details">
                         <IconButton
                           size="small"
-                          onClick={() => handlePaymentDetails(payment)}
+                          onClick={() => handleRequestDetails(request)}
                         >
                           <Visibility />
                         </IconButton>
                       </Tooltip>
-                      {payment.referralAgent && payment.commissionStatus === 'pending' && (
-                        <Tooltip title="Pay Commission">
+                      {request.status === 'pending' && (
+                        <Tooltip title="Process Request">
                           <IconButton
                             size="small"
-                            color="success"
-                            onClick={() => handlePayCommission(payment)}
+                            color="primary"
+                            onClick={() => handleProcessRequest(request)}
                           >
                             <Payment />
                           </IconButton>
@@ -469,75 +478,89 @@ const PaymentManagement = () => {
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={payments?.pagination?.total || 0}
+          count={payoutRequests?.pagination?.total || 0}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} of ${count}`}
         />
       </Paper>
 
-      {/* Payment Details Dialog */}
+      {/* Request Details Dialog */}
       <Dialog
-        open={paymentDetailsOpen}
-        onClose={() => setPaymentDetailsOpen(false)}
+        open={requestDetailsOpen}
+        onClose={() => setRequestDetailsOpen(false)}
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Payment Details</DialogTitle>
+        <DialogTitle>Payout Request Details</DialogTitle>
         <DialogContent>
-          {selectedPayment && (
+          {selectedRequest && (
             <Box>
               <Grid container spacing={3}>
                 <Grid xs={12} md={6}>
                   <Typography variant="h6" gutterBottom>
-                    Payment Information
+                    Request Information
                   </Typography>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Payment ID
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedPayment._id}
-                    </Typography>
-                  </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       Amount
                     </Typography>
                     <Typography variant="h6" color="primary">
-                      {formatCurrency(selectedPayment.amount)}
+                      {formatCurrency(selectedRequest.amount)}
                     </Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       Status
                     </Typography>
-                    <Chip
-                      label={selectedPayment.status}
-                      color={getStatusColor(selectedPayment.status)}
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {getStatusIcon(selectedRequest.status)}
+                      <Chip
+                        label={selectedRequest.status}
+                        color={getStatusColor(selectedRequest.status)}
+                      />
+                    </Box>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Date
+                      Request Date
                     </Typography>
                     <Typography variant="body1">
-                      {formatDate(selectedPayment.createdAt)}
+                      {formatDate(selectedRequest.requestDate)}
                     </Typography>
                   </Box>
+                  {selectedRequest.processedDate && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Processed Date
+                      </Typography>
+                      <Typography variant="body1">
+                        {formatDate(selectedRequest.processedDate)}
+                      </Typography>
+                    </Box>
+                  )}
+                  {selectedRequest.notes && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Notes
+                      </Typography>
+                      <Typography variant="body1">
+                        {selectedRequest.notes}
+                      </Typography>
+                    </Box>
+                  )}
                 </Grid>
                 <Grid xs={12} md={6}>
                   <Typography variant="h6" gutterBottom>
-                    User Information
+                    Agent Information
                   </Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       Name
                     </Typography>
                     <Typography variant="body1">
-                      {selectedPayment.user?.firstName} {selectedPayment.user?.lastName}
+                      {selectedRequest.agent?.firstName} {selectedRequest.agent?.lastName}
                     </Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
@@ -545,55 +568,44 @@ const PaymentManagement = () => {
                       Email
                     </Typography>
                     <Typography variant="body1">
-                      {selectedPayment.user?.email}
+                      {selectedRequest.agent?.email}
                     </Typography>
                   </Box>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Course
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedPayment.course?.title}
-                    </Typography>
-                  </Box>
-                  {selectedPayment.referralAgent && (
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    Bank Details
+                  </Typography>
+                  {selectedRequest.agent?.bankDetails ? (
                     <>
-                      <Divider sx={{ my: 2 }} />
-                      <Typography variant="h6" gutterBottom>
-                        Referral Information
-                      </Typography>
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="body2" color="text.secondary">
-                          Referral Agent
+                          Bank Name
                         </Typography>
                         <Typography variant="body1">
-                          {selectedPayment.referralAgent.firstName} {selectedPayment.referralAgent.lastName}
+                          {selectedRequest.agent.bankDetails.bankName}
                         </Typography>
                       </Box>
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="body2" color="text.secondary">
-                          Commission Rate
+                          Account Number
                         </Typography>
                         <Typography variant="body1">
-                          {selectedPayment.referralAgent.commissionRate}%
+                          ****{selectedRequest.agent.bankDetails.accountNumber?.slice(-4)}
                         </Typography>
                       </Box>
-                      {selectedPayment.referralAgent && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Commission Amount
-                          </Typography>
-                          <Typography variant="h6" color="success.main">
-                            {formatCurrency((selectedPayment.amount * selectedPayment.referralAgent.commissionRate / 100).toFixed(2))}
-                          </Typography>
-                          <Chip
-                            label={selectedPayment.commissionStatus || 'pending'}
-                            color={getStatusColor(selectedPayment.commissionStatus || 'pending')}
-                            size="small"
-                          />
-                        </Box>
-                      )}
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Account Holder
+                        </Typography>
+                        <Typography variant="body1">
+                          {selectedRequest.agent.bankDetails.accountHolderName}
+                        </Typography>
+                      </Box>
                     </>
+                  ) : (
+                    <Alert severity="warning">
+                      Agent has not provided bank details
+                    </Alert>
                   )}
                 </Grid>
               </Grid>
@@ -601,8 +613,82 @@ const PaymentManagement = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPaymentDetailsOpen(false)}>
+          <Button onClick={() => setRequestDetailsOpen(false)}>
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Process Request Dialog */}
+      <Dialog
+        open={processDialogOpen}
+        onClose={() => setProcessDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Process Payout Request</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={processData.status}
+                  label="Status"
+                  onChange={(e) => setProcessData(prev => ({ ...prev, status: e.target.value }))}
+                >
+                  <MenuItem value="approved">Approve</MenuItem>
+                  <MenuItem value="completed">Complete</MenuItem>
+                  <MenuItem value="rejected">Reject</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            {processData.status === 'completed' && (
+              <Grid xs={12}>
+                <TextField
+                  fullWidth
+                  label="Payout Reference"
+                  value={processData.payoutReference}
+                  onChange={(e) => setProcessData(prev => ({ ...prev, payoutReference: e.target.value }))}
+                  placeholder="Enter payout reference number"
+                />
+              </Grid>
+            )}
+            {processData.status === 'rejected' && (
+              <Grid xs={12}>
+                <TextField
+                  fullWidth
+                  label="Rejection Reason"
+                  value={processData.rejectionReason}
+                  onChange={(e) => setProcessData(prev => ({ ...prev, rejectionReason: e.target.value }))}
+                  placeholder="Enter reason for rejection"
+                  required
+                />
+              </Grid>
+            )}
+            <Grid xs={12}>
+              <TextField
+                fullWidth
+                label="Admin Notes"
+                multiline
+                rows={3}
+                value={processData.adminNotes}
+                onChange={(e) => setProcessData(prev => ({ ...prev, adminNotes: e.target.value }))}
+                placeholder="Add notes about this request..."
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setProcessDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleProcessSubmit}
+            disabled={!processData.status || (processData.status === 'rejected' && !processData.rejectionReason)}
+          >
+            Process Request
           </Button>
         </DialogActions>
       </Dialog>
@@ -610,4 +696,4 @@ const PaymentManagement = () => {
   );
 };
 
-export default PaymentManagement; 
+export default PayoutRequestsManagement; 

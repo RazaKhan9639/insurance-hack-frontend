@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Container,
@@ -41,6 +41,7 @@ import {
   PersonAdd,
   MonetizationOn,
 } from '@mui/icons-material';
+import { Tooltip } from '@mui/material';
 import {
   Tabs,
   Tab,
@@ -51,9 +52,9 @@ import {
   getReferralHistory,
   getCommissionHistory,
   getReferralCode,
-  requestPayout,
   updateAgentProfile,
 } from '../../store/slices/referralSlice';
+import { createPayoutRequest } from '../../store/slices/adminSlice';
 import BankDetails from './BankDetails';
 
 const AgentDashboard = () => {
@@ -76,6 +77,7 @@ const AgentDashboard = () => {
     },
   });
   
+  const hasInitialized = useRef(false);
   const { user } = useSelector((state) => state.auth);
   const { 
     referralStats, 
@@ -88,20 +90,40 @@ const AgentDashboard = () => {
   } = useSelector((state) => state.referral);
 
   useEffect(() => {
-    if (user?.role === 'agent') {
+    if (user?.role === 'agent' && user?._id && !hasInitialized.current) {
+      hasInitialized.current = true;
       dispatch(getReferralStats());
       dispatch(getReferralHistory());
       dispatch(getCommissionHistory());
       dispatch(getReferralCode());
     }
-  }, [dispatch, user]);
 
-  // Debug logging
+    // Cleanup function to reset ref when component unmounts
+    return () => {
+      hasInitialized.current = false;
+    };
+  }, [dispatch, user?.role, user?._id]);
+
+
+
+  // Debug logging - only log when data changes significantly
   useEffect(() => {
-    console.log('Referral Code State:', referralCode);
-    console.log('Referral Stats State:', referralStats);
-    console.log('Referral History State:', referralHistory);
-  }, [referralCode, referralStats, referralHistory]);
+    if (user && user.bankDetails && user.bankDetails.isVerified) {
+      console.log('User Bank Details Verified:', user.bankDetails);
+    }
+  }, [user?.bankDetails?.isVerified]);
+
+  useEffect(() => {
+    if (referralStats && referralStats.pendingCommission > 0) {
+      console.log('Pending Commission Available:', referralStats.pendingCommission);
+    }
+  }, [referralStats?.pendingCommission]);
+
+  useEffect(() => {
+    if (commissionHistory) {
+      console.log('Commission History Data:', commissionHistory);
+    }
+  }, [commissionHistory]);
 
   const handleCopyReferralCode = () => {
     if (referralCode) {
@@ -118,9 +140,10 @@ const AgentDashboard = () => {
 
   const handlePayoutRequest = () => {
     if (payoutAmount && payoutMethod) {
-      dispatch(requestPayout({
+      dispatch(createPayoutRequest({
         amount: parseFloat(payoutAmount),
-        payoutMethod,
+        notes: `Payout request for ${payoutAmount}`,
+        commissionIds: [] // Will be populated from pending commissions
       }));
       setPayoutDialog(false);
       setPayoutAmount('');
@@ -130,6 +153,24 @@ const AgentDashboard = () => {
   const handleUpdateProfile = () => {
     dispatch(updateAgentProfile(profileData));
     setProfileDialog(false);
+  };
+
+  const handleOpenProfileDialog = () => {
+    // Load current user data into the form
+    setProfileData({
+      firstName: user?.firstName || '',
+      lastName: user?.lastName || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      country: user?.country || '',
+      bankDetails: {
+        accountName: user?.bankDetails?.accountHolderName || '',
+        accountNumber: user?.bankDetails?.accountNumber || '',
+        bankName: user?.bankDetails?.bankName || '',
+        swiftCode: user?.bankDetails?.swiftCode || '',
+      },
+    });
+    setProfileDialog(true);
   };
 
   const handleTabChange = (event, newValue) => {
@@ -403,6 +444,7 @@ const AgentDashboard = () => {
             <Tab label="Overview" />
             <Tab label="Bank Details" />
             <Tab label="Commission History" />
+            <Tab label="Payout Requests" />
           </Tabs>
         </AppBar>
 
@@ -412,9 +454,69 @@ const AgentDashboard = () => {
             <Typography variant="h6" gutterBottom>
               Agent Overview
             </Typography>
-            <Typography variant="body1" color="text.secondary">
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
               Welcome to your agent dashboard. Use the tabs above to manage your bank details and view commission history.
             </Typography>
+            
+            {/* Bank Details Status */}
+            <Card variant="outlined" sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Bank Details Status
+                </Typography>
+                {user?.bankDetails?.accountNumber && user?.bankDetails?.bankName ? (
+                  <Box>
+                    <Chip
+                      label={user?.bankDetails?.isVerified ? 'Verified' : 'Pending Verification'}
+                      color={user?.bankDetails?.isVerified ? 'success' : 'warning'}
+                      sx={{ mb: 2 }}
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      Bank: {user.bankDetails.bankName}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Account: ****{user.bankDetails.accountNumber.slice(-4)}
+                    </Typography>
+                    {!user?.bankDetails?.isVerified && (
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        Your bank details are pending verification by admin. You'll be able to request payouts once verified.
+                      </Alert>
+                    )}
+                  </Box>
+                ) : (
+                  <Alert severity="warning">
+                    Please add your bank details in the "Bank Details" tab to receive payouts.
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+            
+            {/* Commission Status */}
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Commission Status
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Pending Commission: £{referralStats?.pendingCommission || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total Commission: £{referralStats?.totalCommission || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Paid Commission: £{referralStats?.paidCommission || 0}
+                </Typography>
+                {referralStats?.pendingCommission > 0 && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    You have £{referralStats.pendingCommission} in pending commissions. 
+                    {user?.bankDetails?.isVerified 
+                      ? ' You can request a payout once admin processes your commissions.'
+                      : ' Please verify your bank details to request payouts.'
+                    }
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
           </Box>
         )}
 
@@ -435,7 +537,7 @@ const AgentDashboard = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
                 <CircularProgress />
               </Box>
-            ) : (
+            ) : commissionHistory?.length > 0 ? (
               <TableContainer>
                 <Table>
                   <TableHead>
@@ -444,6 +546,7 @@ const AgentDashboard = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Payment Method</TableCell>
                       <TableCell>Date</TableCell>
+                      <TableCell>Referral</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -470,11 +573,77 @@ const AgentDashboard = () => {
                             {new Date(commission.createdAt).toLocaleDateString()}
                           </Typography>
                         </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {commission.referral?.username || 'N/A'}
+                          </Typography>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  No commission history available yet.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Commissions will appear here when users purchase courses using your referral code.
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {/* Payout Requests Tab */}
+        {tabValue === 3 && (
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Payout Requests
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Track your payout requests and their status.
+            </Typography>
+            <Tooltip title={
+              !referralStats?.pendingCommission || referralStats?.pendingCommission <= 0 
+                ? 'No pending commission available' 
+                : !user?.bankDetails?.accountNumber || !user?.bankDetails?.bankName
+                ? 'Please add your bank details first'
+                : !user?.bankDetails?.isVerified
+                ? 'Your bank details are pending verification'
+                : 'Request a payout'
+            }>
+              <span>
+                <Button
+                  variant="contained"
+                  startIcon={<Payment />}
+                  onClick={() => setPayoutDialog(true)}
+                  disabled={
+                    !referralStats?.pendingCommission || 
+                    referralStats?.pendingCommission <= 0 ||
+                    !user?.bankDetails?.accountNumber ||
+                    !user?.bankDetails?.bankName ||
+                    !user?.bankDetails?.isVerified
+                  }
+                  sx={{ mb: 2 }}
+                >
+                  Request New Payout
+                </Button>
+              </span>
+            </Tooltip>
+            <Typography variant="body2" color="text.secondary">
+              Pending Commission: £{referralStats?.pendingCommission || 0}
+            </Typography>
+            {(!user?.bankDetails?.accountNumber || !user?.bankDetails?.bankName) && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Please add your bank details before requesting a payout.
+              </Alert>
+            )}
+            {user?.bankDetails?.accountNumber && user?.bankDetails?.bankName && !user?.bankDetails?.isVerified && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Your bank details are pending verification by admin. You'll be able to request payouts once verified.
+              </Alert>
             )}
           </Box>
         )}
@@ -482,18 +651,36 @@ const AgentDashboard = () => {
 
       {/* Action Buttons */}
       <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
-        <Button
-          variant="contained"
-          startIcon={<Payment />}
-          onClick={() => setPayoutDialog(true)}
-          disabled={!referralStats?.pendingCommission || referralStats?.pendingCommission <= 0}
-        >
-          Request Payout
-        </Button>
+        <Tooltip title={
+          !referralStats?.pendingCommission || referralStats?.pendingCommission <= 0 
+            ? 'No pending commission available' 
+            : !user?.bankDetails?.accountNumber || !user?.bankDetails?.bankName
+            ? 'Please add your bank details first'
+            : !user?.bankDetails?.isVerified
+            ? 'Your bank details are pending verification'
+            : 'Request a payout'
+        }>
+          <span>
+            <Button
+              variant="contained"
+              startIcon={<Payment />}
+              onClick={() => setPayoutDialog(true)}
+              disabled={
+                !referralStats?.pendingCommission || 
+                referralStats?.pendingCommission <= 0 ||
+                !user?.bankDetails?.accountNumber ||
+                !user?.bankDetails?.bankName ||
+                !user?.bankDetails?.isVerified
+              }
+            >
+              Request Payout
+            </Button>
+          </span>
+        </Tooltip>
         <Button
           variant="outlined"
           startIcon={<History />}
-          onClick={() => setProfileDialog(true)}
+          onClick={handleOpenProfileDialog}
         >
           Update Profile
         </Button>

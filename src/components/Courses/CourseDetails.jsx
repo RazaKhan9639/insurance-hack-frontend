@@ -169,7 +169,7 @@ const CourseDetails = () => {
                   </Typography>
                   {isEnrolled ? (
                     <Chip label="Enrolled" color="success" />
-                  ) : (
+                  ) : user?.role !== 'admin' ? (
                     <Button
                       variant="contained"
                       size="large"
@@ -178,7 +178,7 @@ const CourseDetails = () => {
                     >
                       Buy Now
                     </Button>
-                  )}
+                  ) : null}
                 </Box>
               </Box>
             </CardContent>

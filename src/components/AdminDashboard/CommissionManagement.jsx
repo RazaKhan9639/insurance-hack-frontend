@@ -45,9 +45,10 @@ import {
   FilterList,
   Refresh,
   Download,
-  Search
+  Search,
+  Send
 } from '@mui/icons-material';
-import { getAllCommissions, processManualPayout } from '../../store/slices/adminSlice';
+import { getAllCommissions, processManualPayout, processBankTransfer } from '../../store/slices/adminSlice';
 
 const CommissionManagement = () => {
   const dispatch = useDispatch();
@@ -69,10 +70,24 @@ const CommissionManagement = () => {
     paymentMethod: 'bank_transfer',
     notes: ''
   });
+  const [bankTransferDialogOpen, setBankTransferDialogOpen] = useState(false);
+  const [bankTransferData, setBankTransferData] = useState({
+    agentId: '',
+    agentName: '',
+    amount: '',
+    notes: '',
+    transferReference: ''
+  });
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    dispatch(getAllCommissions({ ...filters, page: page + 1, limit: rowsPerPage }));
+    const params = {
+      page: page + 1,
+      limit: rowsPerPage,
+      ...filters
+    };
+    dispatch(getAllCommissions(params));
   }, [dispatch, filters, page, rowsPerPage]);
 
   const handleChangePage = (event, newPage) => {
@@ -116,6 +131,31 @@ const CommissionManagement = () => {
     }
   };
 
+  const handleBankTransfer = (agent) => {
+    setSelectedAgent(agent);
+    setBankTransferData({
+      agentId: agent._id,
+      agentName: `${agent.firstName} ${agent.lastName}`,
+      amount: '',
+      notes: '',
+      transferReference: ''
+    });
+    setBankTransferDialogOpen(true);
+  };
+
+  const handleProcessBankTransfer = async () => {
+    try {
+      await dispatch(processBankTransfer(bankTransferData));
+      setBankTransferDialogOpen(false);
+      setBankTransferData({ agentId: '', agentName: '', amount: '', notes: '', transferReference: '' });
+      setSelectedAgent(null);
+      // Refresh commissions
+      dispatch(getAllCommissions({ ...filters, page: page + 1, limit: rowsPerPage }));
+    } catch (error) {
+      console.error('Bank transfer error:', error);
+    }
+  };
+
   const handleExportCommissions = () => {
     const csvData = commissions?.commissions?.map(commission => ({
       'Agent': `${commission.agent?.firstName} ${commission.agent?.lastName}`,
@@ -143,7 +183,7 @@ const CommissionManagement = () => {
   };
 
   const formatCurrency = (amount) => {
-    return `£${parseFloat(amount).toFixed(2)}`;
+    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   const formatDate = (date) => {
@@ -290,15 +330,25 @@ const CommissionManagement = () => {
                       </Typography>
                     </Box>
                     {agent.pendingCommission > 0 && (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<Send />}
-                        onClick={() => handlePayout(agent.agent._id, agent.pendingCommission)}
-                        sx={{ mt: 1 }}
-                      >
-                        Process Payout
-                      </Button>
+                      <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<Send />}
+                          onClick={() => handlePayout(agent.agent._id, agent.pendingCommission)}
+                        >
+                          Process Payout
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Payment />}
+                          onClick={() => handleBankTransfer(agent.agent)}
+                          disabled={!agent.agent.bankDetails?.isVerified}
+                        >
+                          Bank Transfer
+                        </Button>
+                      </Box>
                     )}
                   </CardContent>
                 </Card>
@@ -682,6 +732,124 @@ const CommissionManagement = () => {
           >
             Process Payout
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bank Transfer Dialog */}
+      <Dialog
+        open={bankTransferDialogOpen}
+        onClose={() => setBankTransferDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Process Bank Transfer</DialogTitle>
+        <DialogContent>
+          {selectedAgent && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Agent: {bankTransferData.agentName}
+                </Typography>
+              </Grid>
+              
+              {selectedAgent.bankDetails ? (
+                <>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Bank Name"
+                      value={selectedAgent.bankDetails.bankName || ''}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Account Number"
+                      value={`****${selectedAgent.bankDetails.accountNumber?.slice(-4) || ''}`}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Account Holder"
+                      value={selectedAgent.bankDetails.accountHolderName || ''}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Routing Number"
+                      value={selectedAgent.bankDetails.routingNumber || ''}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12}>
+                    <Chip
+                      label={selectedAgent.bankDetails.isVerified ? 'Verified' : 'Not Verified'}
+                      color={selectedAgent.bankDetails.isVerified ? 'success' : 'warning'}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Transfer Amount"
+                      type="number"
+                      value={bankTransferData.amount}
+                      onChange={(e) => setBankTransferData(prev => ({ ...prev, amount: e.target.value }))}
+                      InputProps={{
+                        startAdornment: <Typography>$</Typography>
+                      }}
+                      required
+                    />
+                  </Grid>
+                  <Grid xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Transfer Reference"
+                      value={bankTransferData.transferReference}
+                      onChange={(e) => setBankTransferData(prev => ({ ...prev, transferReference: e.target.value }))}
+                      placeholder="Bank transfer reference number"
+                    />
+                  </Grid>
+                  <Grid xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Notes"
+                      multiline
+                      rows={3}
+                      value={bankTransferData.notes}
+                      onChange={(e) => setBankTransferData(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Add notes about this transfer..."
+                    />
+                  </Grid>
+                </>
+              ) : (
+                <Grid xs={12}>
+                  <Alert severity="warning">
+                    This agent has not provided bank details yet.
+                  </Alert>
+                </Grid>
+              )}
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBankTransferDialogOpen(false)}>
+            Cancel
+          </Button>
+          {selectedAgent?.bankDetails?.isVerified && (
+            <Button
+              variant="contained"
+              onClick={handleProcessBankTransfer}
+              disabled={!bankTransferData.amount || parseFloat(bankTransferData.amount) <= 0}
+            >
+              Process Bank Transfer
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

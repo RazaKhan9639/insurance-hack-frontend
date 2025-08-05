@@ -44,6 +44,7 @@ export const getCommissionHistory = createAsyncThunk(
       const config = {
         headers: { Authorization: `Bearer ${token}` }
       };
+      // Use the agent dashboard endpoint which includes commission history
       const response = await axios.get(`${API_URL}/referrals/agent-dashboard`, config);
       return response.data;
     } catch (error) {
@@ -185,7 +186,7 @@ const referralSlice = createSlice({
       })
       .addCase(getCommissionHistory.fulfilled, (state, action) => {
         state.loading = false;
-        state.commissionHistory = action.payload?.data?.commissions || action.payload?.commissions || [];
+        state.commissionHistory = action.payload?.data?.dashboard?.recentCommissions || action.payload?.dashboard?.recentCommissions || [];
       })
       .addCase(getCommissionHistory.rejected, (state, action) => {
         state.loading = false;

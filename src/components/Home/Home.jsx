@@ -34,7 +34,7 @@ const Home = () => {
   const navigate = useNavigate();
   
   const { courses, loading } = useSelector((state) => state.course);
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     dispatch(fetchCourses());
@@ -255,15 +255,17 @@ const Home = () => {
                     </Box>
                   </CardContent>
                   <CardActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<PlayArrow />}
-                      onClick={() => navigate(`/payment/${course._id}`)}
-                      fullWidth
-                    >
-                      Buy Now
-                    </Button>
+                    {user?.role !== 'admin' && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<PlayArrow />}
+                        onClick={() => navigate(`/payment/${course._id}`)}
+                        fullWidth
+                      >
+                        Buy Now
+                      </Button>
+                    )}
                   </CardActions>
                 </Card>
               </Grid>

@@ -438,22 +438,24 @@ const Dashboard = () => {
                       </Box>
                     </CardContent>
                     <CardActions sx={{ p: 2, pt: 0 }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => {
-                          console.log('Course object:', course);
-                          console.log('Course ID:', course._id);
-                          if (course._id) {
-                            navigate(`/payment/${course._id}`);
-                          } else {
-                            console.error('Course ID is undefined');
-                          }
-                        }}
-                        fullWidth
-                      >
-                        Buy Now
-                      </Button>
+                      {user?.role !== 'admin' && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => {
+                            console.log('Course object:', course);
+                            console.log('Course ID:', course._id);
+                            if (course._id) {
+                              navigate(`/payment/${course._id}`);
+                            } else {
+                              console.error('Course ID is undefined');
+                            }
+                          }}
+                          fullWidth
+                        >
+                          Buy Now
+                        </Button>
+                      )}
                     </CardActions>
                   </Card>
                 </Grid>

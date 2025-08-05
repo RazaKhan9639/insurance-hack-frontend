@@ -44,7 +44,8 @@ import {
 import { 
   getAllUsers, 
   updateUserRole, 
-  deleteUser 
+  deleteUser,
+  verifyAgentBankDetails
 } from '../../store/slices/adminSlice';
 
 const UserManagement = () => {
@@ -55,6 +56,12 @@ const UserManagement = () => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [bankDetailsDialogOpen, setBankDetailsDialogOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [verificationData, setVerificationData] = useState({
+    isVerified: false,
+    verificationNotes: ''
+  });
   
   const { users, loading, error, success } = useSelector((state) => state.admin);
 
@@ -154,6 +161,29 @@ const UserManagement = () => {
   const handleDeleteClick = (user) => {
     setUserToDelete(user);
     setDeleteDialogOpen(true);
+  };
+
+  const handleBankDetailsClick = (user) => {
+    setSelectedAgent(user);
+    setVerificationData({
+      isVerified: user.bankDetails?.isVerified || false,
+      verificationNotes: user.bankDetails?.verificationNotes || ''
+    });
+    setBankDetailsDialogOpen(true);
+  };
+
+  const handleVerifyBankDetails = async () => {
+    try {
+      await dispatch(verifyAgentBankDetails({
+        userId: selectedAgent._id,
+        ...verificationData
+      }));
+      setBankDetailsDialogOpen(false);
+      setSelectedAgent(null);
+      setVerificationData({ isVerified: false, verificationNotes: '' });
+    } catch (error) {
+      console.error('Error verifying bank details:', error);
+    }
   };
 
   const getRoleColor = (role) => {
@@ -288,6 +318,15 @@ const UserManagement = () => {
                   <IconButton size="small" onClick={() => handleOpenEditDialog(user)}>
                     <Edit />
                   </IconButton>
+                  {user.role === 'agent' && (
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleBankDetailsClick(user)}
+                      title="Verify Bank Details"
+                    >
+                      <Payment />
+                    </IconButton>
+                  )}
                   <IconButton 
                     size="small" 
                     onClick={() => handleDeleteClick(user)}
@@ -401,6 +440,107 @@ const UserManagement = () => {
           <Button onClick={handleDeleteUser} color="error" variant="contained">
             Delete
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bank Details Verification Dialog */}
+      <Dialog open={bankDetailsDialogOpen} onClose={() => setBankDetailsDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Verify Agent Bank Details</DialogTitle>
+        <DialogContent>
+          {selectedAgent && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Agent: {selectedAgent.firstName} {selectedAgent.lastName}
+                </Typography>
+              </Grid>
+              
+              {selectedAgent.bankDetails ? (
+                <>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Bank Name"
+                      value={selectedAgent.bankDetails.bankName || ''}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Account Number"
+                      value={`****${selectedAgent.bankDetails.accountNumber?.slice(-4) || ''}`}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Account Holder"
+                      value={selectedAgent.bankDetails.accountHolderName || ''}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Routing Number"
+                      value={selectedAgent.bankDetails.routingNumber || ''}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                  <Grid xs={12}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={verificationData.isVerified}
+                          onChange={(e) => setVerificationData({
+                            ...verificationData,
+                            isVerified: e.target.checked
+                          })}
+                        />
+                      }
+                      label="Verify Bank Details"
+                    />
+                  </Grid>
+                  <Grid xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Verification Notes"
+                      multiline
+                      rows={3}
+                      value={verificationData.verificationNotes}
+                      onChange={(e) => setVerificationData({
+                        ...verificationData,
+                        verificationNotes: e.target.value
+                      })}
+                      placeholder="Add notes about the verification..."
+                    />
+                  </Grid>
+                </>
+              ) : (
+                <Grid xs={12}>
+                  <Alert severity="warning">
+                    This agent has not provided bank details yet.
+                  </Alert>
+                </Grid>
+              )}
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBankDetailsDialogOpen(false)}>
+            Cancel
+          </Button>
+          {selectedAgent?.bankDetails && (
+            <Button 
+              onClick={handleVerifyBankDetails} 
+              variant="contained"
+              disabled={updating}
+            >
+              {updating ? 'Verifying...' : 'Update Verification'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Container>

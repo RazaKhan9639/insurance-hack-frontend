@@ -38,6 +38,7 @@ import CourseManagement from './CourseManagement';
 import UserManagement from './UserManagement';
 import PaymentManagement from './PaymentManagement';
 import CommissionManagement from './CommissionManagement';
+import PayoutRequestsManagement from './PayoutRequestsManagement';
 
 const TabPanel = ({ children, value, index, ...other }) => (
   <div
@@ -229,6 +230,7 @@ const AdminDashboard = () => {
             <Tab label="User Management" />
             <Tab label="Payments" />
             <Tab label="Commissions" />
+            <Tab label="Payout Requests" />
           </Tabs>
         </AppBar>
 
@@ -255,6 +257,10 @@ const AdminDashboard = () => {
 
         <TabPanel value={tabValue} index={4}>
           <CommissionManagement />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={5}>
+          <PayoutRequestsManagement />
         </TabPanel>
       </Paper>
     </Container>

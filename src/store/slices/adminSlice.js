@@ -44,11 +44,12 @@ export const getAllUsers = createAsyncThunk(
 
 export const getAllPayments = createAsyncThunk(
   'admin/getAllPayments',
-  async (_, { rejectWithValue, getState }) => {
+  async (params = {}, { rejectWithValue, getState }) => {
     try {
       const token = getState().auth.token || localStorage.getItem('token');
       const config = {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params
       };
       
       const response = await apiCallWithRetry(() => 
@@ -65,11 +66,12 @@ export const getAllPayments = createAsyncThunk(
 
 export const getAllCommissions = createAsyncThunk(
   'admin/getAllCommissions',
-  async (_, { rejectWithValue, getState }) => {
+  async (params = {}, { rejectWithValue, getState }) => {
     try {
       const token = getState().auth.token || localStorage.getItem('token');
       const config = {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params
       };
       
       const response = await apiCallWithRetry(() => 
@@ -277,10 +279,120 @@ export const performBulkActions = createAsyncThunk(
   }
 );
 
+export const getAllPayoutRequests = createAsyncThunk(
+  'admin/getAllPayoutRequests',
+  async (params = {}, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.get(`${API_URL}/admin/payout-requests`, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error fetching payout requests:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch payout requests');
+    }
+  }
+);
+
+export const processPayoutRequest = createAsyncThunk(
+  'admin/processPayoutRequest',
+  async ({ requestId, status, adminNotes, payoutReference, rejectionReason }, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.put(`${API_URL}/admin/payout-requests/${requestId}/process`, 
+          { status, adminNotes, payoutReference, rejectionReason }, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error processing payout request:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to process payout request');
+    }
+  }
+);
+
+export const createPayoutRequest = createAsyncThunk(
+  'admin/createPayoutRequest',
+  async (payoutData, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.post(`${API_URL}/admin/payout-requests`, payoutData, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error creating payout request:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to create payout request');
+    }
+  }
+);
+
+export const verifyAgentBankDetails = createAsyncThunk(
+  'admin/verifyAgentBankDetails',
+  async ({ userId, isVerified, verificationNotes }, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.put(`${API_URL}/admin/users/${userId}/verify-bank-details`, 
+          { isVerified, verificationNotes }, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error verifying bank details:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to verify bank details');
+    }
+  }
+);
+
+export const processBankTransfer = createAsyncThunk(
+  'admin/processBankTransfer',
+  async ({ agentId, amount, notes, transferReference }, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.post(`${API_URL}/admin/commissions/bank-transfer`, 
+          { agentId, amount, notes, transferReference }, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error processing bank transfer:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to process bank transfer');
+    }
+  }
+);
+
 const initialState = {
   users: [],
   payments: [],
   commissions: [],
+  payoutRequests: [],
   topAgents: [],
   systemStats: null,
   loading: false,
@@ -328,7 +440,7 @@ const adminSlice = createSlice({
       })
       .addCase(getAllPayments.fulfilled, (state, action) => {
         state.loading = false;
-        state.payments = action.payload?.payments || [];
+        state.payments = action.payload || { payments: [], pagination: {}, summary: {} };
         state.lastFetchTime = Date.now();
       })
       .addCase(getAllPayments.rejected, (state, action) => {
@@ -342,7 +454,7 @@ const adminSlice = createSlice({
       })
       .addCase(getAllCommissions.fulfilled, (state, action) => {
         state.loading = false;
-        state.commissions = action.payload?.commissions || [];
+        state.commissions = action.payload || { commissions: [], pagination: {}, summary: {}, agentSummary: [] };
         state.lastFetchTime = Date.now();
       })
       .addCase(getAllCommissions.rejected, (state, action) => {
@@ -482,6 +594,84 @@ const adminSlice = createSlice({
         state.success = true;
       })
       .addCase(performBulkActions.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Get All Payout Requests
+      .addCase(getAllPayoutRequests.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllPayoutRequests.fulfilled, (state, action) => {
+        state.loading = false;
+        state.payoutRequests = action.payload || { payoutRequests: [], pagination: {}, summary: {} };
+        state.lastFetchTime = Date.now();
+      })
+      .addCase(getAllPayoutRequests.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Process Payout Request
+      .addCase(processPayoutRequest.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(processPayoutRequest.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        // Update payout request in the list
+        const index = state.payoutRequests.payoutRequests?.findIndex(request => request._id === action.payload?.payoutRequest?._id);
+        if (index !== -1) {
+          state.payoutRequests.payoutRequests[index] = action.payload.payoutRequest;
+        }
+      })
+      .addCase(processPayoutRequest.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Create Payout Request
+      .addCase(createPayoutRequest.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createPayoutRequest.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+      })
+      .addCase(createPayoutRequest.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Verify Agent Bank Details
+      .addCase(verifyAgentBankDetails.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyAgentBankDetails.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        // Update user in the list
+        const index = state.users.findIndex(user => user._id === action.payload?.user?._id);
+        if (index !== -1) {
+          state.users[index] = action.payload.user;
+        }
+      })
+      .addCase(verifyAgentBankDetails.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Process Bank Transfer
+      .addCase(processBankTransfer.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(processBankTransfer.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        // Refresh commissions after successful transfer
+        state.lastFetchTime = Date.now();
+      })
+      .addCase(processBankTransfer.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
