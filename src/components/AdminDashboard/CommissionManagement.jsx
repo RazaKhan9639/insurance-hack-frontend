@@ -34,7 +34,13 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
-  Avatar
+  Avatar,
+  Checkbox,
+  FormControlLabel,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Stack
 } from '@mui/material';
 import {
   Visibility,
@@ -46,9 +52,15 @@ import {
   Refresh,
   Download,
   Search,
-  Send
+  Send,
+  CheckCircle,
+  ExpandMore,
+  AccountBox,
+  CreditCard,
+  Business,
+  Security
 } from '@mui/icons-material';
-import { getAllCommissions, processManualPayout, processBankTransfer } from '../../store/slices/adminSlice';
+import { getAllCommissions, processManualPayout, processBankTransfer, updateCommissionStatus, processBulkPayout } from '../../store/slices/adminSlice';
 
 const CommissionManagement = () => {
   const dispatch = useDispatch();
@@ -80,6 +92,17 @@ const CommissionManagement = () => {
   });
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // New states for enhanced functionality
+  const [selectedCommissions, setSelectedCommissions] = useState([]);
+  const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
+  const [individualStatusDialogOpen, setIndividualStatusDialogOpen] = useState(false);
+  const [commissionForStatusUpdate, setCommissionForStatusUpdate] = useState(null);
+  const [statusUpdateData, setStatusUpdateData] = useState({
+    status: 'paid',
+    payoutMethod: 'manual',
+    payoutNotes: ''
+  });
 
   useEffect(() => {
     const params = {
@@ -153,6 +176,67 @@ const CommissionManagement = () => {
       dispatch(getAllCommissions({ ...filters, page: page + 1, limit: rowsPerPage }));
     } catch (error) {
       console.error('Bank transfer error:', error);
+    }
+  };
+
+  // New functions for enhanced functionality
+  const handleCommissionSelection = (commissionId, checked) => {
+    if (checked) {
+      setSelectedCommissions(prev => [...prev, commissionId]);
+    } else {
+      setSelectedCommissions(prev => prev.filter(id => id !== commissionId));
+    }
+  };
+
+  const handleSelectAllCommissions = (checked) => {
+    if (checked) {
+      const pendingCommissionIds = commissions?.commissions
+        ?.filter(commission => commission.status === 'pending')
+        ?.map(commission => commission._id) || [];
+      setSelectedCommissions(pendingCommissionIds);
+    } else {
+      setSelectedCommissions([]);
+    }
+  };
+
+  const handleBulkMarkAsPaid = async () => {
+    try {
+      await dispatch(processBulkPayout({
+        commissionIds: selectedCommissions,
+        payoutMethod: 'manual',
+        payoutNotes: 'Bulk manual transfer'
+      }));
+      setBulkActionDialogOpen(false);
+      setSelectedCommissions([]);
+      // Refresh commissions
+      dispatch(getAllCommissions({ ...filters, page: page + 1, limit: rowsPerPage }));
+    } catch (error) {
+      console.error('Bulk action error:', error);
+    }
+  };
+
+  const handleIndividualStatusUpdate = (commission) => {
+    setCommissionForStatusUpdate(commission);
+    setStatusUpdateData({
+      status: 'paid',
+      payoutMethod: 'manual',
+      payoutNotes: ''
+    });
+    setIndividualStatusDialogOpen(true);
+  };
+
+  const handleUpdateIndividualStatus = async () => {
+    try {
+      await dispatch(updateCommissionStatus({
+        commissionId: commissionForStatusUpdate._id,
+        ...statusUpdateData
+      }));
+      setIndividualStatusDialogOpen(false);
+      setCommissionForStatusUpdate(null);
+      // Refresh commissions
+      dispatch(getAllCommissions({ ...filters, page: page + 1, limit: rowsPerPage }));
+    } catch (error) {
+      console.error('Status update error:', error);
     }
   };
 
@@ -301,7 +385,7 @@ const CommissionManagement = () => {
         </Grid>
       </Grid>
 
-      {/* Agent Summary */}
+      {/* Agent Summary with Enhanced Bank Details */}
       {commissions?.agentSummary && commissions.agentSummary.length > 0 && (
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="h6" gutterBottom>
@@ -329,8 +413,84 @@ const CommissionManagement = () => {
                         Paid: {formatCurrency(agent.paidCommission)}
                       </Typography>
                     </Box>
+                    
+                    {/* Enhanced Bank Details Section */}
+                    {agent.agent.bankDetails && (
+                      <Accordion sx={{ mt: 2 }}>
+                        <AccordionSummary expandIcon={<ExpandMore />}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <AccountBox fontSize="small" />
+                            <Typography variant="body2">Bank Details</Typography>
+                            <Chip
+                              label={agent.agent.bankDetails.isVerified ? 'Verified' : 'Pending'}
+                              color={agent.agent.bankDetails.isVerified ? 'success' : 'warning'}
+                              size="small"
+                            />
+                          </Box>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <Stack spacing={1}>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Bank Name
+                              </Typography>
+                              <Typography variant="body2">
+                                {agent.agent.bankDetails.bankName}
+                              </Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Account Holder
+                              </Typography>
+                              <Typography variant="body2">
+                                {agent.agent.bankDetails.accountHolderName}
+                              </Typography>
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Account Number
+                              </Typography>
+                              <Typography variant="body2" fontFamily="monospace">
+                                ****{agent.agent.bankDetails.accountNumber?.slice(-4)}
+                              </Typography>
+                            </Box>
+                            {agent.agent.bankDetails.routingNumber && (
+                              <Box>
+                                <Typography variant="caption" color="text.secondary">
+                                  Routing Number
+                                </Typography>
+                                <Typography variant="body2" fontFamily="monospace">
+                                  {agent.agent.bankDetails.routingNumber}
+                                </Typography>
+                              </Box>
+                            )}
+                            {agent.agent.bankDetails.swiftCode && (
+                              <Box>
+                                <Typography variant="caption" color="text.secondary">
+                                  SWIFT Code
+                                </Typography>
+                                <Typography variant="body2" fontFamily="monospace">
+                                  {agent.agent.bankDetails.swiftCode}
+                                </Typography>
+                              </Box>
+                            )}
+                            {agent.agent.bankDetails.iban && (
+                              <Box>
+                                <Typography variant="caption" color="text.secondary">
+                                  IBAN
+                                </Typography>
+                                <Typography variant="body2" fontFamily="monospace">
+                                  {agent.agent.bankDetails.iban}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Stack>
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+                    
                     {agent.pendingCommission > 0 && (
-                      <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                         <Button
                           variant="contained"
                           size="small"
@@ -364,14 +524,26 @@ const CommissionManagement = () => {
           <Typography variant="h6">
             Filters
           </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<Download />}
-            onClick={handleExportCommissions}
-            disabled={!commissions?.commissions?.length}
-          >
-            Export CSV
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {selectedCommissions.length > 0 && (
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<CheckCircle />}
+                onClick={() => setBulkActionDialogOpen(true)}
+              >
+                Mark {selectedCommissions.length} as Paid
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<Download />}
+              onClick={handleExportCommissions}
+              disabled={!commissions?.commissions?.length}
+            >
+              Export CSV
+            </Button>
+          </Box>
         </Box>
         <Grid container spacing={2}>
           <Grid xs={12} sm={6} md={4}>
@@ -429,6 +601,7 @@ const CommissionManagement = () => {
               });
               setSearchTerm('');
               setPage(0);
+              setSelectedCommissions([]);
             }}
           >
             Clear Filters
@@ -442,6 +615,13 @@ const CommissionManagement = () => {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    checked={selectedCommissions.length === (commissions?.commissions?.filter(c => c.status === 'pending')?.length || 0)}
+                    indeterminate={selectedCommissions.length > 0 && selectedCommissions.length < (commissions?.commissions?.filter(c => c.status === 'pending')?.length || 0)}
+                    onChange={(e) => handleSelectAllCommissions(e.target.checked)}
+                  />
+                </TableCell>
                 <TableCell>Agent</TableCell>
                 <TableCell>Referral</TableCell>
                 <TableCell>Payment</TableCell>
@@ -466,6 +646,14 @@ const CommissionManagement = () => {
                 })
                 .map((commission) => (
                 <TableRow key={commission._id}>
+                  <TableCell padding="checkbox">
+                    {commission.status === 'pending' && (
+                      <Checkbox
+                        checked={selectedCommissions.includes(commission._id)}
+                        onChange={(e) => handleCommissionSelection(commission._id, e.target.checked)}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Box>
                       <Typography variant="body2" fontWeight="medium">
@@ -514,14 +702,27 @@ const CommissionManagement = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Tooltip title="View Details">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleCommissionDetails(commission)}
-                      >
-                        <Visibility />
-                      </IconButton>
-                    </Tooltip>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Tooltip title="View Details">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleCommissionDetails(commission)}
+                        >
+                          <Visibility />
+                        </IconButton>
+                      </Tooltip>
+                      {commission.status === 'pending' && (
+                        <Tooltip title="Mark as Paid">
+                          <IconButton
+                            size="small"
+                            color="success"
+                            onClick={() => handleIndividualStatusUpdate(commission)}
+                          >
+                            <CheckCircle />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -619,6 +820,58 @@ const CommissionManagement = () => {
                       {selectedCommission.agent?.email}
                     </Typography>
                   </Box>
+                  
+                  {/* Enhanced Bank Details in Commission Details */}
+                  {selectedCommission.agent?.bankDetails && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Typography variant="h6" gutterBottom>
+                        Bank Details
+                      </Typography>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Bank Name
+                        </Typography>
+                        <Typography variant="body1">
+                          {selectedCommission.agent.bankDetails.bankName}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Account Holder
+                        </Typography>
+                        <Typography variant="body1">
+                          {selectedCommission.agent.bankDetails.accountHolderName}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Account Number
+                        </Typography>
+                        <Typography variant="body1" fontFamily="monospace">
+                          ****{selectedCommission.agent.bankDetails.accountNumber?.slice(-4)}
+                        </Typography>
+                      </Box>
+                      {selectedCommission.agent.bankDetails.routingNumber && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Routing Number
+                          </Typography>
+                          <Typography variant="body1" fontFamily="monospace">
+                            {selectedCommission.agent.bankDetails.routingNumber}
+                          </Typography>
+                        </Box>
+                      )}
+                      <Box sx={{ mb: 2 }}>
+                        <Chip
+                          label={selectedCommission.agent.bankDetails.isVerified ? 'Verified' : 'Not Verified'}
+                          color={selectedCommission.agent.bankDetails.isVerified ? 'success' : 'warning'}
+                          size="small"
+                        />
+                      </Box>
+                    </>
+                  )}
+                  
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
                     Referral Information
@@ -850,6 +1103,110 @@ const CommissionManagement = () => {
               Process Bank Transfer
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Action Dialog */}
+      <Dialog
+        open={bulkActionDialogOpen}
+        onClose={() => setBulkActionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Bulk Mark as Paid</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to mark {selectedCommissions.length} commission(s) as paid?
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            This action will update the status of all selected commissions to "paid" and record them as manual transfers.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkActionDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleBulkMarkAsPaid}
+          >
+            Mark as Paid
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Individual Status Update Dialog */}
+      <Dialog
+        open={individualStatusDialogOpen}
+        onClose={() => setIndividualStatusDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Update Commission Status</DialogTitle>
+        <DialogContent>
+          {commissionForStatusUpdate && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid xs={12}>
+                <Typography variant="body1" gutterBottom>
+                  Commission: {formatCurrency(commissionForStatusUpdate.amount)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Agent: {commissionForStatusUpdate.agent?.firstName} {commissionForStatusUpdate.agent?.lastName}
+                </Typography>
+              </Grid>
+              <Grid xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={statusUpdateData.status}
+                    label="Status"
+                    onChange={(e) => setStatusUpdateData(prev => ({ ...prev, status: e.target.value }))}
+                  >
+                    <MenuItem value="paid">Paid</MenuItem>
+                    <MenuItem value="pending">Pending</MenuItem>
+                    <MenuItem value="cancelled">Cancelled</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Payment Method</InputLabel>
+                  <Select
+                    value={statusUpdateData.payoutMethod}
+                    label="Payment Method"
+                    onChange={(e) => setStatusUpdateData(prev => ({ ...prev, payoutMethod: e.target.value }))}
+                  >
+                    <MenuItem value="manual">Manual Transfer</MenuItem>
+                    <MenuItem value="bank_transfer">Bank Transfer</MenuItem>
+                    <MenuItem value="stripe_payout">Stripe Payout</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid xs={12}>
+                <TextField
+                  fullWidth
+                  label="Notes"
+                  multiline
+                  rows={3}
+                  value={statusUpdateData.payoutNotes}
+                  onChange={(e) => setStatusUpdateData(prev => ({ ...prev, payoutNotes: e.target.value }))}
+                  placeholder="Add notes about this status update..."
+                />
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIndividualStatusDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleUpdateIndividualStatus}
+          >
+            Update Status
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

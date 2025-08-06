@@ -388,6 +388,28 @@ export const processBankTransfer = createAsyncThunk(
   }
 );
 
+export const processStripePayout = createAsyncThunk(
+  'admin/processStripePayout',
+  async ({ agentId, amount, notes, transferReference }, { rejectWithValue, getState }) => {
+    try {
+      const token = getState().auth.token || localStorage.getItem('token');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      
+      const response = await apiCallWithRetry(() => 
+        axios.post(`${API_URL}/admin/commissions/stripe-payout`, 
+          { agentId, amount, notes, transferReference }, config)
+      );
+      
+      return response?.data?.data;
+    } catch (error) {
+      console.error('Error processing Stripe payout:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to process Stripe payout');
+    }
+  }
+);
+
 const initialState = {
   users: [],
   payments: [],
@@ -672,6 +694,21 @@ const adminSlice = createSlice({
         state.lastFetchTime = Date.now();
       })
       .addCase(processBankTransfer.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Process Stripe Payout
+      .addCase(processStripePayout.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(processStripePayout.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        // Refresh commissions after successful payout
+        state.lastFetchTime = Date.now();
+      })
+      .addCase(processStripePayout.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

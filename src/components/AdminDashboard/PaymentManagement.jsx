@@ -29,7 +29,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider
+  Divider,
+  Menu,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import {
   Visibility,
@@ -40,9 +43,10 @@ import {
   FilterList,
   Refresh,
   Download,
-  Search
+  Search,
+  MoreVert
 } from '@mui/icons-material';
-import { getAllPayments, processBankTransfer } from '../../store/slices/adminSlice';
+import { getAllPayments, processBankTransfer, processStripePayout } from '../../store/slices/adminSlice';
 
 const PaymentManagement = () => {
   const dispatch = useDispatch();
@@ -62,6 +66,8 @@ const PaymentManagement = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [paymentDetailsOpen, setPaymentDetailsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [paymentMenuAnchor, setPaymentMenuAnchor] = useState(null);
+  const [selectedPaymentForMenu, setSelectedPaymentForMenu] = useState(null);
 
   useEffect(() => {
     const params = {
@@ -91,14 +97,37 @@ const PaymentManagement = () => {
     setPaymentDetailsOpen(true);
   };
 
-  const handlePayCommission = (payment) => {
+  const handlePayCommission = (payment, method = 'bank') => {
     const commissionAmount = (payment.amount * payment.referralAgent.commissionRate / 100).toFixed(2);
-    dispatch(processBankTransfer({
+    const payload = {
       agentId: payment.referralAgent._id,
       amount: parseFloat(commissionAmount),
       notes: `Commission payment for payment ${payment._id}`,
       transferReference: `COMM-${payment._id}`
-    }));
+    };
+    
+    if (method === 'stripe') {
+      dispatch(processStripePayout(payload));
+    } else {
+      dispatch(processBankTransfer(payload));
+    }
+  };
+
+  const handlePaymentMenuOpen = (event, payment) => {
+    setPaymentMenuAnchor(event.currentTarget);
+    setSelectedPaymentForMenu(payment);
+  };
+
+  const handlePaymentMenuClose = () => {
+    setPaymentMenuAnchor(null);
+    setSelectedPaymentForMenu(null);
+  };
+
+  const handlePaymentMethodSelect = (method) => {
+    if (selectedPaymentForMenu) {
+      handlePayCommission(selectedPaymentForMenu, method);
+    }
+    handlePaymentMenuClose();
   };
 
   const handleExportPayments = () => {
@@ -453,9 +482,9 @@ const PaymentManagement = () => {
                           <IconButton
                             size="small"
                             color="success"
-                            onClick={() => handlePayCommission(payment)}
+                            onClick={(event) => handlePaymentMenuOpen(event, payment)}
                           >
-                            <Payment />
+                            <PaymentIcon />
                           </IconButton>
                         </Tooltip>
                       )}
@@ -606,6 +635,34 @@ const PaymentManagement = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Payment Method Menu */}
+      <Menu
+        anchorEl={paymentMenuAnchor}
+        open={Boolean(paymentMenuAnchor)}
+        onClose={handlePaymentMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem onClick={() => handlePaymentMethodSelect('bank')}>
+          <ListItemIcon>
+            <PaymentIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Bank Transfer</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => handlePaymentMethodSelect('stripe')}>
+          <ListItemIcon>
+            <PaymentIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Stripe Payout</ListItemText>
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };
