@@ -1,8 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
-
-const API_URL = 'http://localhost:5000/api';
+import { API_URL } from '../../config/api';
 
 const token = localStorage.getItem('token');
 let user = null;
@@ -38,7 +37,7 @@ export const loginUser = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       const response = await axios.post(`${API_URL}/auth/login`, credentials);
-      console.log(response);
+
       localStorage.setItem('token', response?.data?.data?.token);
       return response?.data?.data;
     } catch (error) {
@@ -52,7 +51,7 @@ export const getCurrentUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('token');
-      console.log(token);
+
       if (!token) throw new Error('No token found');
       const config = {
         headers: { Authorization: `Bearer ${token}` }

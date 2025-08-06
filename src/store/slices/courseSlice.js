@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
-
-const API_URL = 'http://localhost:5000/api';
+import { API_URL } from '../../config/api';
 
 // Helper function to add retry logic
 const apiCallWithRetry = async (apiCall, maxRetries = 3) => {
@@ -46,7 +45,7 @@ export const getCourseById = createAsyncThunk(
   'course/getCourseById',
   async (courseId, { rejectWithValue, getState }) => {
     try {
-      console.log('getCourseById called with courseId:', courseId);
+  
       const token = getState().auth.token || localStorage.getItem('token');
       const config = {
         headers: { Authorization: `Bearer ${token}` }
@@ -56,7 +55,7 @@ export const getCourseById = createAsyncThunk(
         axios.get(`${API_URL}/courses/${courseId}`, config)
       );
       
-      console.log('getCourseById response:', response.data);
+      
       return response.data;
     } catch (error) {
       console.error('getCourseById error:', error);
